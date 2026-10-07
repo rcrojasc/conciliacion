@@ -1,0 +1,2 @@
+@extends('layouts.app')
+@section('content')<h1>Auditoría</h1><div class="card"><form method="GET"><input name="action" value="{{request('action')}}" placeholder="Filtrar acción"><button>Filtrar</button></form><table><thead><tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Entidad</th><th>ID</th><th>IP</th></tr></thead><tbody>@foreach($logs as $l)<tr><td>{{$l->created_at}}</td><td>{{$l->user_id}}</td><td>{{$l->action}}</td><td>{{$l->entity_type}}</td><td>{{$l->entity_id}}</td><td>{{$l->ip_address}}</td></tr>@endforeach</tbody></table>{{$logs->links()}}</div>@endsection

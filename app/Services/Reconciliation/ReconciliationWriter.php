@@ -1,0 +1,19 @@
+<?php
+namespace App\Services\Reconciliation;
+use App\Enums\BankTransactionStatus;use App\Enums\DocumentStatus;use App\Enums\ReconciliationStatus;use App\Models\BankTransaction;use App\Models\FinancialDocument;use App\Models\Reconciliation;use Illuminate\Support\Facades\DB;use Illuminate\Validation\ValidationException;
+final class ReconciliationWriter {
+ public function approve(BankTransaction $tx,FinancialDocument $doc,float $score,int|string $userId,string $method='manual',?string $ruleId=null): Reconciliation { return $this->approveOneToMany($tx,collect([$doc]),$score,$userId,$method,$ruleId); }
+ public function approveOneToMany(BankTransaction $tx,$documents,float $score,int|string $userId,string $method='manual_1_n',?string $ruleId=null): Reconciliation { return DB::transaction(function() use($tx,$documents,$score,$userId,$method,$ruleId){
+  $tx=BankTransaction::query()->lockForUpdate()->findOrFail($tx->id);$available=abs((float)$tx->amount)-$this->alreadyApplied($tx);if($available<=0)throw ValidationException::withMessages(['transaction'=>'El movimiento no posee saldo disponible.']);
+  $rec=Reconciliation::create(['organization_id'=>$tx->organization_id,'status'=>ReconciliationStatus::Approved,'method'=>$documents->count()>1?$method:($method==='manual_1_n'?'manual':$method),'confidence_score'=>$score,'proposed_by'=>$userId,'approved_by'=>$userId,'approved_at'=>now()]);
+  foreach($documents as $input){if($available<=0)break;$doc=FinancialDocument::query()->lockForUpdate()->findOrFail($input->id);if(!in_array($doc->status,[DocumentStatus::Open,DocumentStatus::Partial,DocumentStatus::Overdue],true))continue;$open=(float)$doc->open_amount;$applied=min($available,$open);if($applied<=0)continue;$rec->items()->create(['bank_transaction_id'=>$tx->id,'financial_document_id'=>$doc->id,'applied_amount'=>$applied,'currency'=>$tx->currency]);$remaining=max(0,$open-$applied);$doc->update(['open_amount'=>$remaining,'status'=>$remaining<=0?DocumentStatus::Paid:DocumentStatus::Partial]);$available-=$applied;}
+  $tx->update(['status'=>$available>0?BankTransactionStatus::PartiallyReconciled:BankTransactionStatus::Reconciled]);return $rec;
+ });}
+ public function approveManyToOne($transactions,FinancialDocument $doc,float $score,int|string $userId): Reconciliation { return DB::transaction(function() use($transactions,$doc,$score,$userId){
+  $doc=FinancialDocument::query()->lockForUpdate()->findOrFail($doc->id);$open=(float)$doc->open_amount;$rec=Reconciliation::create(['organization_id'=>$doc->organization_id,'status'=>ReconciliationStatus::Approved,'method'=>'manual_n_1','confidence_score'=>$score,'proposed_by'=>$userId,'approved_by'=>$userId,'approved_at'=>now()]);
+  foreach($transactions as $input){if($open<=0)break;$tx=BankTransaction::query()->lockForUpdate()->findOrFail($input->id);$available=abs((float)$tx->amount)-$this->alreadyApplied($tx);$applied=min($available,$open);if($applied<=0)continue;$rec->items()->create(['bank_transaction_id'=>$tx->id,'financial_document_id'=>$doc->id,'applied_amount'=>$applied,'currency'=>$tx->currency]);$open-=$applied;$tx->update(['status'=>$available>$applied?BankTransactionStatus::PartiallyReconciled:BankTransactionStatus::Reconciled]);}
+  $doc->update(['open_amount'=>max(0,$open),'status'=>$open<=0?DocumentStatus::Paid:DocumentStatus::Partial]);return $rec;
+ });}
+ private function alreadyApplied(BankTransaction $tx): float { return (float)DB::table('reconciliation_items')->join('reconciliations','reconciliations.id','=','reconciliation_items.reconciliation_id')->where('bank_transaction_id',$tx->id)->where('reconciliations.status','!=',ReconciliationStatus::Reversed->value)->sum('applied_amount'); }
+ public function ignore(BankTransaction $tx): void {DB::transaction(function() use($tx){$locked=BankTransaction::query()->lockForUpdate()->findOrFail($tx->id);$locked->update(['status'=>BankTransactionStatus::Ignored]);});}
+}

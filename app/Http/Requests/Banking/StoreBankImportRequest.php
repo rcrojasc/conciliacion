@@ -1,0 +1,4 @@
+<?php
+namespace App\Http\Requests\Banking;
+use Illuminate\Foundation\Http\FormRequest;
+class StoreBankImportRequest extends FormRequest { public function authorize(): bool{return true;} public function rules(): array{return ['bank_account_id'=>['required','string'],'file'=>['required','file','mimes:csv,xlsx','max:20480'],'column_map'=>['required','array'],'column_map.booking_date'=>['required','string'],'column_map.amount'=>['required','string'],'column_map.description'=>['required','string'],'column_map.direction'=>['nullable','string'],'column_map.currency'=>['nullable','string'],'column_map.value_date'=>['nullable','string'],'column_map.reference'=>['nullable','string'],'column_map.operation_number'=>['nullable','string'],'column_map.counterparty_tax_id'=>['nullable','string'],'column_map.counterparty_name'=>['nullable','string'],'column_map.balance_after'=>['nullable','string']];} }

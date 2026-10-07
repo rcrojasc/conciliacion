@@ -1,0 +1,3 @@
+<?php
+namespace App\Services\Audit;use App\Models\AuditLog;use Illuminate\Database\Eloquent\Model;
+final class AuditService {public function record(string $action,?Model $entity=null,?array $before=null,?array $after=null,array $metadata=[]):AuditLog{$request=request();return AuditLog::create(['organization_id'=>app(\App\Services\Tenancy\TenantContext::class)->id(),'user_id'=>auth()->id(),'action'=>$action,'entity_type'=>$entity?get_class($entity):($metadata['entity_type']??'system'),'entity_id'=>$entity?->getKey(),'before'=>$before,'after'=>$after,'metadata'=>$metadata,'ip_address'=>$request?->ip(),'created_at'=>now()]);}}

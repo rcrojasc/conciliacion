@@ -1,0 +1,3 @@
+<?php
+namespace App\Services\Reconciliation\Governance;use App\Models\OrganizationControl;
+final class ApprovalPolicy {public function evaluate(string $organizationId,float $amount,string $method,bool $hasDifference=false):array{$c=OrganizationControl::firstOrCreate(['organization_id'=>$organizationId]);$high=$amount>=(float)$c->high_risk_amount_threshold;$requires=$c->maker_checker_enabled&&($amount>=(float)$c->checker_amount_threshold||($c->require_checker_for_manual&&str_starts_with($method,'manual'))||($c->require_checker_for_differences&&$hasDifference));return ['requires_checker'=>$requires,'risk_level'=>$high?'high':($requires?'elevated':'normal')];}}
